@@ -1026,7 +1026,6 @@ func (d *Driver) setupNFSShare() error {
 	}
 
 	mountCommands := fmt.Sprintf("#/bin/bash\\n")
-	mountCommands += "sudo /usr/local/etc/init.d/nfs-client start\\n"
 
 	for _, share := range d.NFSShares {
 		if !path.IsAbs(share) {
