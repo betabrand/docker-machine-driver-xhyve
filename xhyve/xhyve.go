@@ -492,6 +492,19 @@ func (d *Driver) Start() error {
 		return err
 	}
 
+	currentstate, _ := d.GetState()
+	if len(d.NFSShares) > 0 && currentstate == state.Stopped {
+		for _, path := range d.NFSShares {
+			_, err := os.Stat(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return fmt.Errorf("The NFS share path %s does not exist. Make sure this path exists.", path)
+				}
+				return fmt.Errorf("An unknown error occured while checking if %s exists: %s", path, err)
+			}
+		}
+	}
+
 	pid := d.ResolveStorePath(d.MachineName + ".pid")
 	if _, err := os.Stat(pid); err == nil {
 		os.Remove(pid)
@@ -564,8 +577,24 @@ func (d *Driver) Stop() error {
 
 	d.IPAddress = ""
 	d.detachDiskImage()
+	d.cleanupNfsExports()
 
 	return nil
+}
+
+func (d *Driver) cleanupNfsExports() {
+	if len(d.NFSShares) > 0 {
+		log.Infof("Remove NFS share folder must be root. Please insert root password.")
+		for _, share := range d.NFSShares {
+			if _, err := nfsexports.Remove("", d.nfsExportIdentifier(share)); err != nil {
+				log.Errorf("failed removing nfs share (%s): %s", share, err.Error())
+			}
+		}
+
+		if err := nfsexports.ReloadDaemon(); err != nil {
+			log.Errorf("failed reload nfs daemon: %s", err.Error())
+		}
+	}
 }
 
 func (d *Driver) Remove() error {
@@ -587,18 +616,6 @@ func (d *Driver) Remove() error {
 		return err
 	}
 
-	if len(d.NFSShares) > 0 {
-		log.Infof("Remove NFS share folder must be root. Please insert root password.")
-		for _, share := range d.NFSShares {
-			if _, err := nfsexports.Remove("", d.nfsExportIdentifier(share)); err != nil {
-				log.Errorf("failed removing nfs share (%s): %s", share, err.Error())
-			}
-		}
-
-		if err := nfsexports.ReloadDaemon(); err != nil {
-			log.Errorf("failed reload nfs daemon: %s", err.Error())
-		}
-	}
 	return nil
 }
 
